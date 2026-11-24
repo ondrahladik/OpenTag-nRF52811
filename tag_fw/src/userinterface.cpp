@@ -1,0 +1,620 @@
+#include "userinterface.h"
+
+#include <stdbool.h>
+#include <string.h>
+
+#include "bitmaps.h"
+#include "comms.h"
+
+#include "lut.h"
+#include "powermgt.h"
+
+#include "../../shared/oepl-proto.h"
+#include "settings.h"
+#include "syncedproto.h"  // for APmac / Channel
+#include "hal.h"
+#include "drawing.h"
+#include "font.h"
+
+#include "epd_driver/epd_interface.h"
+
+#include "../../shared/oepl-definitions.h"
+
+const uint8_t fwVersionMajor = FW_VERSION_MAJOR;
+const uint8_t fwVersionMinor = FW_VERSION_MINOR;
+const uint8_t fwVersionPatch = FW_VERSION_PATCH;
+
+bool lowBatteryShown = false;
+bool noAPShown = false;
+
+void addOverlay() {
+    if (currentChannel == 0 && tagSettings.enableNoRFSymbol) {
+        drawMask(epd->Xres - 28, 4, 24, 24, COLOR_BLACK);
+        if (tag.thirdColor) {
+            drawMask(epd->Xres - 28, 4, 24, 24, COLOR_RED);
+            drawRoundedRectangle(epd->Xres - 28, 4, 24, 24, COLOR_RED);
+            addBufferedImage(epd->Xres - 24, 8, COLOR_BLACK, rotation::ROTATE_0, ant, DRAW_NORMAL);
+            addBufferedImage(epd->Xres - 16, 15, COLOR_RED, rotation::ROTATE_0, cross, DRAW_NORMAL);
+        } else {
+            drawRoundedRectangle(epd->Xres - 28, 4, 24, 24, COLOR_BLACK);
+            addBufferedImage(epd->Xres - 24, 8, COLOR_BLACK, rotation::ROTATE_0, ant, DRAW_NORMAL);
+            addBufferedImage(epd->Xres - 16, 15, COLOR_BLACK, rotation::ROTATE_0, cross, DRAW_NORMAL);
+        }
+        noAPShown = true;
+    } else {
+        noAPShown = false;
+    }
+
+    if (lowBattery && tagSettings.enableLowBatSymbol) {
+        drawMask(epd->Xres - 27, epd->Yres - 26, 22, 22, COLOR_BLACK);
+        if (tag.thirdColor) {
+            drawMask(epd->Xres - 27, epd->Yres - 26, 22, 22, COLOR_RED);
+            drawRoundedRectangle(epd->Xres - 28, epd->Yres - 26, 24, 24, COLOR_RED);
+        } else {
+            drawMask(epd->Xres - 27, epd->Yres - 26, 22, 22, COLOR_BLACK);
+            drawRoundedRectangle(epd->Xres - 28, epd->Yres - 26, 24, 24, COLOR_BLACK);
+        }
+        addBufferedImage(epd->Xres - 24, epd->Yres - 19, COLOR_BLACK, rotation::ROTATE_0, battery, DRAW_NORMAL);
+        lowBatteryShown = true;
+    } else {
+        lowBatteryShown = false;
+    }
+#if defined(DEBUG_BUILD) && defined(DEBUG_DISPLAY_OVERLAY)
+    fontrender fr(&FreeSansBold18pt7b);
+    drawMask(15, epd->Yres - 53, 130, 33, COLOR_BLACK);
+    if (tag.thirdColor) {
+        drawMask(15, epd->Yres - 53, 130, 33, COLOR_RED);
+        drawMask(15, epd->Yres - 53, 130, 33, COLOR_YELLOW);
+        drawRoundedRectangle(15, epd->Yres - 53, 129, 33, COLOR_RED);
+        fr.epdPrintf(17, epd->Yres - 50, COLOR_RED, rotation::ROTATE_0, "DEBUG");
+    } else {
+        drawMask(15, epd->Yres - 53, 130, 33, COLOR_BLACK);
+        drawRoundedRectangle(15, epd->Yres - 53, 129, 33, COLOR_BLACK);
+        fr.epdPrintf(17, epd->Yres - 50, COLOR_BLACK, rotation::ROTATE_0, "DEBUG");
+    }
+#endif
+}
+
+void afterFlashScreenSaver() {
+    selectLUT(EPD_LUT_DEFAULT);
+    draw();
+}
+
+void uiPrintOpenTag(fontrender *fr, uint16_t x, uint16_t y, const GFXfont *font) {
+    uint16_t tagX = x;
+    for (const char *c = "Open"; *c; c++) {
+        uint8_t character = static_cast<uint8_t>(*c);
+        if (character >= font->first && character <= font->last) {
+            tagX += font->glyph[character - font->first].xAdvance;
+        }
+    }
+
+    fr->epdPrintf(x, y, COLOR_BLACK, rotation::ROTATE_0, "Open");
+    uint8_t tagColor = (tag.thirdColor & COLOR_RED) ? COLOR_RED : COLOR_BLACK;
+    fr->epdPrintf(tagX, y, tagColor, rotation::ROTATE_0, "Tag");
+}
+
+void showSplashScreen() {
+    selectLUT(EPD_LUT_FAST_NO_REDS);
+    fontrender fr(&FreeSansBold18pt7b);
+    switch (tag.solumType) {
+        case STYPE_SIZE_016:
+        case STYPE_SIZE_16_BWRY:
+        case STYPE_SIZE_013:
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSans9pt7b);
+            if (tag.solumType == STYPE_SIZE_013) {
+                fr.epdPrintf(2, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 1.3 Peghook\"");
+            } else {
+                fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 1.6\"");
+            }
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(2, epd->Yres - 20, 0, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_022:
+        case 0x67:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.2\"");
+            fr.epdPrintf(10, 46, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.2\"");
+            fr.epdPrintf(10, 54, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.2\"");
+
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_022_LITE:
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.2\" Lite");
+            fr.epdPrintf(5, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 25, 0, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;		
+		case STYPE_SIZE_022_BW:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.2\" BW");
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_026:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.6\"");
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_029:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.9\"");
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_029_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.9\" Freezer");
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, COLOR_BLACK, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, COLOR_BLACK, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_042:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 4.2\"");
+            // fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_043:
+            fr.setFont(&FreeSansBold24pt7b);
+            uiPrintOpenTag(&fr, 7, 7, &FreeSansBold24pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 4.3\"");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_058:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 5.85\"");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_058_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 2, 2, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 5.85\" Freezer");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 0, COLOR_BLACK, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, COLOR_BLACK, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_060:
+            fr.setFont(&FreeSansBold24pt7b);
+            uiPrintOpenTag(&fr, 10, 10, &FreeSansBold24pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 6.0\"");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            addFlashImage(293, 61, COLOR_BLACK, rotation::ROTATE_0, newton);
+            break;
+        case STYPE_SIZE_60_BWRY:
+            fr.setFont(&FreeSansBold24pt7b);
+            uiPrintOpenTag(&fr, 10, 10, &FreeSansBold24pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 6.0\" BWRY");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            addFlashImage(293, 61, COLOR_BLACK, rotation::ROTATE_0, newton);
+            break;
+        case STYPE_SIZE_075:
+            fr.setFont(&FreeSansBold24pt7b);
+            uiPrintOpenTag(&fr, 10, 10, &FreeSansBold24pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 7.5\"");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            addFlashImage(420, 81, COLOR_BLACK, rotation::ROTATE_0, newton);
+            break;
+        case STYPE_SIZE_097:
+        case STYPE_SIZE_116B:
+        case STYPE_SIZE_116:
+            fr.setFont(&FreeSansBold24pt7b);
+            uiPrintOpenTag(&fr, 10, 10, &FreeSansBold24pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            if (tag.solumType == STYPE_SIZE_116B) {
+                fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 11.6\"");
+            } else {
+                fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 9.7\"");
+            }
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 37, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            addFlashImage(220, 420, COLOR_BLACK, rotation::ROTATE_0, newton);
+            break;
+        case STYPE_SIZE_027:
+            fr.setFont(&FreeSansBold18pt7b);
+            uiPrintOpenTag(&fr, 5, 5, &FreeSansBold18pt7b);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(15, 40, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.7\"");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(epd->Xres - 20, 110, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            //  addFlashImage(10, 10, COLOR_BLACK, rotation::ROTATE_0, newton);
+            break;
+    }
+#if defined(DEBUG_BUILD) && defined(DEBUG_DISPLAY_OVERLAY)
+    drawMask(15, epd->Yres - 53, 129, 33, COLOR_BLACK);
+    if (tag.thirdColor) {
+        drawMask(15, epd->Yres - 53, 129, 33, COLOR_RED);
+        drawRoundedRectangle(15, epd->Yres - 53, 129, 33, COLOR_RED);
+        fr.setFont(&FreeSansBold18pt7b);
+        fr.epdPrintf(17, epd->Yres - 50, COLOR_RED, rotation::ROTATE_0, "DEBUG");
+    } else {
+        drawMask(15, epd->Yres - 53, 129, 33, COLOR_BLACK);
+        drawRoundedRectangle(15, epd->Yres - 53, 129, 33, COLOR_BLACK);
+        fr.setFont(&FreeSansBold18pt7b);
+        fr.epdPrintf(17, epd->Yres - 50, COLOR_BLACK, rotation::ROTATE_0, "DEBUG");
+    }
+#endif
+    draw();
+}
+
+
+void uiPrintBatteryVoltage(fontrender *fr, uint16_t x, uint16_t y) {
+    fr->epdPrintf(x, y, 0, rotation::ROTATE_0, "Battery: %d.%02dV Temp: %d'C", batteryVoltage / 1000, (batteryVoltage % 1000) / 10, temperature);
+}
+
+void showAPFound() {
+    selectLUT(EPD_LUT_NO_REPEATS);
+    fontrender fr(&FreeSansBold18pt7b);
+    switch (tag.solumType) {
+        case STYPE_SIZE_016:
+        case STYPE_SIZE_013:
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(7, 6, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.epdPrintf(0, 24, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(5, 42, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(5, 60, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 5, epd->Yres - 43);
+            fr.epdPrintf(0, epd->Yres - 25, 0, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_022:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_022_LITE:
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.epdPrintf(10, 33, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 51, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 69, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+		case STYPE_SIZE_022_BW:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_BLACK, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_BLACK, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_026:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_029:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_029_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_BLACK, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_BLACK, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_042:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_043:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found - Waiting for data");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(15, 55, COLOR_RED, rotation::ROTATE_0, "GW: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(15, 73, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(270, 55, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_058:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_058_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_BLACK, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_BLACK, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, COLOR_BLACK, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_60_BWRY:
+        case STYPE_SIZE_060:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found - Waiting for data");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(15, 55, COLOR_RED, rotation::ROTATE_0, "GW: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(15, 73, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(270, 55, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_075:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found - Waiting for data");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(15, 55, COLOR_RED, rotation::ROTATE_0, "GW: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(15, 73, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(270, 55, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_097:
+        case STYPE_SIZE_116B:
+        case STYPE_SIZE_116:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found - Waiting for data");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(15, 55, COLOR_RED, rotation::ROTATE_0, "GW: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(15, 73, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(270, 55, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+        case STYPE_SIZE_027:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 53, COLOR_RED, rotation::ROTATE_0, "%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", APmac[7], APmac[6], APmac[5], APmac[4], APmac[3], APmac[2], APmac[1], APmac[0]);
+            fr.epdPrintf(10, 71, COLOR_RED, rotation::ROTATE_0, "RSSI: %ddBm    LQI: %d", mLastRSSI, mLastLqi);
+            fr.epdPrintf(10, 89, COLOR_RED, rotation::ROTATE_0, "Ch %d", currentChannel);
+            fr.setFont(&FreeSans9pt7b);
+            uiPrintBatteryVoltage(&fr, 10, epd->Yres - 43);
+            fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
+            break;
+    }
+    addOverlay();
+    draw();
+}
+void showNoAP() {
+    // selectLUT(EPD_LUT_NO_REPEATS);
+    fontrender fr(&FreeSansBold18pt7b);
+    switch (tag.solumType) {
+        case STYPE_SIZE_016:
+        case STYPE_SIZE_013:
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.epdPrintf(2, 25, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            break;
+        case STYPE_SIZE_022:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            break;
+        case STYPE_SIZE_022_LITE:
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.epdPrintf(10, 59, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 79, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while");
+            break;
+		case STYPE_SIZE_022_BW:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            break;
+        case STYPE_SIZE_026:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(10, 129, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            break;
+        case STYPE_SIZE_029:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            break;
+        case STYPE_SIZE_029_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            break;
+        case STYPE_SIZE_042:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            break;
+        case STYPE_SIZE_043:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found          UwU");
+            fr.setFont(&FreeSans9pt7b);
+            drawRoundedRectangle(36, 55, 112, 42, COLOR_RED);
+            fr.epdPrintf(44, 61, COLOR_BLACK, rotation::ROTATE_0, "NFC WAKE");
+            fr.epdPrintf(41, 77, COLOR_BLACK, rotation::ROTATE_0, "SCAN HERE");
+
+            fr.epdPrintf(152, 49, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(152, 69, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(152, 89, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(152, 109, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            break;
+        case STYPE_SIZE_058:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(152, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(152, 129, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            break;
+        case STYPE_SIZE_058_FREEZER:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(152, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(152, 129, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            break;
+        case STYPE_SIZE_60_BWRY:
+        case STYPE_SIZE_060:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found          U_U");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 39, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 58, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 77, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            addFlashImage(0, 96, COLOR_BLACK, rotation::ROTATE_0, pandablack);
+            addFlashImage(112, 242, COLOR_RED, rotation::ROTATE_0, pandared);
+            break;
+        case STYPE_SIZE_075:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found          U_U");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 39, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 58, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 77, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by pressing a button");
+            addFlashImage(200, 128, COLOR_BLACK, rotation::ROTATE_0, pandablack);
+            addFlashImage(312, 274, COLOR_RED, rotation::ROTATE_0, pandared);
+            break;
+        case STYPE_SIZE_097:
+        case STYPE_SIZE_116B:
+        case STYPE_SIZE_116:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found          U_U");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 39, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 58, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 77, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(10, 98, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            addFlashImage(200, 128, COLOR_BLACK, rotation::ROTATE_0, pandablack);
+            addFlashImage(312, 274, COLOR_RED, rotation::ROTATE_0, pandared);
+            break;
+        case STYPE_SIZE_027:
+            fr.setFont(&FreeSansBold18pt7b);
+            fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "No GW found");
+            fr.setFont(&FreeSans9pt7b);
+            fr.epdPrintf(10, 69, COLOR_BLACK, rotation::ROTATE_0, "Couldn't find a GW. :(");
+            fr.epdPrintf(10, 89, COLOR_BLACK, rotation::ROTATE_0, "I'll try again in a little while, but you");
+            fr.epdPrintf(10, 109, COLOR_BLACK, rotation::ROTATE_0, "can force a retry now by scanning");
+            fr.epdPrintf(10, 129, COLOR_BLACK, rotation::ROTATE_0, "the NFC-wake area with your phone");
+            break;
+    }
+    addOverlay();
+    draw();
+    delay(5000);
+}
+
+void showLongTermSleep() {
+    selectLUT(EPD_LUT_NO_REPEATS);
+    fontrender fr(&FreeSansBold18pt7b);
+    fr.epdPrintf(7, 7, COLOR_BLACK, rotation::ROTATE_0, "Zz");
+    addOverlay();
+    draw();
+}
+void showNoEEPROM() {
+    selectLUT(EPD_LUT_NO_REPEATS);
+    fontrender fr(&FreeSans9pt7b);
+    fr.epdPrintf(2, 2, COLOR_BLACK, rotation::ROTATE_0, "EEPROM FAILED!");
+    draw();
+}
