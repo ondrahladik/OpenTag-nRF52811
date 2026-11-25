@@ -155,7 +155,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSans9pt7b);
             fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.9\"");
             // fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_029_FREEZER:
@@ -164,7 +164,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSans9pt7b);
             fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.9\" Freezer");
             // fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, COLOR_BLACK, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, COLOR_BLACK, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, COLOR_BLACK, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_042:
@@ -173,7 +173,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSans9pt7b);
             fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 4.2\"");
             // fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_043:
@@ -182,7 +182,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSansBold18pt7b);
             fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 4.3\"");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_058:
@@ -191,7 +191,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSans9pt7b);
             fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 5.85\"");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_058_FREEZER:
@@ -200,7 +200,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSans9pt7b);
             fr.epdPrintf(10, 38, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 5.85\" Freezer");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 0, COLOR_BLACK, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, COLOR_BLACK, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, COLOR_BLACK, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             break;
         case STYPE_SIZE_060:
@@ -209,7 +209,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSansBold18pt7b);
             fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 6.0\"");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             addFlashImage(293, 61, COLOR_BLACK, rotation::ROTATE_0, newton);
             break;
@@ -219,7 +219,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSansBold18pt7b);
             fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 6.0\" BWRY");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             addFlashImage(293, 61, COLOR_BLACK, rotation::ROTATE_0, newton);
             break;
@@ -229,7 +229,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSansBold18pt7b);
             fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 7.5\"");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 17, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             addFlashImage(420, 81, COLOR_BLACK, rotation::ROTATE_0, newton);
             break;
@@ -245,7 +245,7 @@ void showSplashScreen() {
                 fr.epdPrintf(15, 60, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 9.7\"");
             }
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 37, 310, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(10, epd->Yres - 45, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(10, epd->Yres - 25, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             addFlashImage(220, 420, COLOR_BLACK, rotation::ROTATE_0, newton);
             break;
@@ -255,7 +255,7 @@ void showSplashScreen() {
             fr.setFont(&FreeSansBold18pt7b);
             fr.epdPrintf(15, 40, COLOR_BLACK, rotation::ROTATE_0, "Newton M3 2.7\"");
             fr.setFont(&FreeSans9pt7b);
-            fr.epdPrintf(epd->Xres - 20, 110, 0, rotation::ROTATE_270, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
+            fr.epdPrintf(5, epd->Yres - 40, 0, rotation::ROTATE_0, "FW: %d.%d.%d", fwVersionMajor, fwVersionMinor, fwVersionPatch);
             fr.epdPrintf(5, epd->Yres - 20, 0, rotation::ROTATE_0, "MAC: %02X:%02X:%02X:%02X:%02X:%02X", mSelfMac[0], mSelfMac[1], mSelfMac[2], mSelfMac[3], mSelfMac[4], mSelfMac[5]);
             //  addFlashImage(10, 10, COLOR_BLACK, rotation::ROTATE_0, newton);
             break;
