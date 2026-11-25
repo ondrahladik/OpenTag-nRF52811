@@ -62,8 +62,12 @@ The HEX file is generated during the build and may not be stored in the reposito
 - An nRF52811 tag with a stable power supply.
 - An ST-Link that supports SWD.
 - OpenOCD for Windows, with a directory structure containing `bin/openocd.exe` and `openocd/scripts/`.
-- For normal programming, connect `SWDIO`, `SWCLK`, `GND`, and the target reference voltage (`VTref`). The tag must be powered separately, `VTref` lets the programmer detect the voltage and does not power the tag itself.
+- For normal programming, connect `SWDIO`, `SWCLK`, `GND`, and `3.3 V`. The tag can be powered from the ST-Link 3.3 V output if the adapter supports it, or from a separate stable 3.3 V supply.
 - For connect-under-reset mode, also connect `NRST`.
+
+### Pinout
+
+![OpenTag nRF52811 pinout](pinout.png)
 
 The script looks for OpenOCD in `openocd/` next to `flash_tag.py`, then in `openocd/` one level above. If it is elsewhere, provide the path using `--openocd-dir`.
 
@@ -111,7 +115,7 @@ Direct flashing writes the internal flash regions included in the full HEX image
 
 - **PlatformIO was not found:** install PlatformIO Core or use `--platformio` with the path to its executable.
 - **OpenOCD was not found:** check the OpenOCD directory and provide it using `--openocd-dir`.
-- **OpenOCD cannot connect (`init mode failed`):** check the tag power, common ground, and `SWDIO`/`SWCLK`/`VTref` connections. Lower the speed with `--adapter-speed 100`, if `NRST` is connected, `--connect-under-reset` may help.
+- **OpenOCD cannot connect (`init mode failed`):** check the tag power, common ground, and `SWDIO`/`SWCLK`/`3.3 V` connections. Lower the speed with `--adapter-speed 100`, if `NRST` is connected, `--connect-under-reset` may help.
 - **Programming fails after writing has started:** the result may be partial. Check the power stability and wiring, then run programming again.
 - **`--flash` cannot find the HEX file:** run `py flash_tag.py --build` first.
 
